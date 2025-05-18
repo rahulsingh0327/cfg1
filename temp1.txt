@@ -31,18 +31,22 @@ def parse_code(input: CodeInput):
             "id": node_id,
             "type": node_type,
             "data": {"label": label},
-            "position": {"x": 0, "y": 150 * id_counter}        })
+            "position": {"x": 0, "y": 150 * id_counter}
+        })
         return node_id
 
-    def add_edge(source, target, label='', animated=False):
+    def add_edge(source, target, label='', animated=False, source_handle=None):
         if source and target:
-            edges.append({
+            edge = {
                 "id": f"e{source}-{target}",
                 "source": source,
                 "target": target,
                 "label": label,
-                "animated": animated
-            })
+                "animated": animated,
+            }
+            if source_handle:
+                edge["sourceHandle"] = source_handle
+            edges.append(edge)
 
     def handle_statements(stmts, prev_ids):
         last_ids = prev_ids[:]
@@ -66,7 +70,6 @@ def parse_code(input: CodeInput):
             elif isinstance(stmt, ast.If):
                 label = f"if {ast.unparse(stmt.test).strip()}:"
                 nid = new_node("decision", label)
-
                 for pid in last_ids:
                     add_edge(pid, nid)
 
@@ -77,6 +80,12 @@ def parse_code(input: CodeInput):
                 if stmt.orelse:
                     else_end_ids = handle_statements(stmt.orelse, [nid])
                     for eid in else_end_ids:
+                        # Find the index of the node in the nodes list
+                        node_index = next((index for index, node in enumerate(nodes) if node['id'] == eid), None)
+                        if node_index is not None:
+                            # Change the position of the "No" branch node
+                            new_position = {"x": 200, "y": 150 * (len(nodes) + 1)}  # Adjust x for right positioning
+                            nodes[node_index]["position"] = new_position  # Update the position of the else node
                         add_edge(nid, eid, label="No")
                     last_ids = then_end_ids + else_end_ids
                 else:
@@ -87,9 +96,12 @@ def parse_code(input: CodeInput):
                 nid = new_node("decision", label)
                 for pid in last_ids:
                     add_edge(pid, nid)
+
                 body_end_ids = handle_statements(stmt.body, [nid])
-                for end_id in body_end_ids:
-                    add_edge(end_id, nid, label="Repeat", animated=True)
+                for bid in body_end_ids:
+                    add_edge(nid, bid, label="Yes")
+                    add_edge(bid, nid, label="Repeat", animated=True)
+
                 last_ids = [nid]
 
             elif isinstance(stmt, ast.While):
@@ -97,12 +109,16 @@ def parse_code(input: CodeInput):
                 nid = new_node("decision", label)
                 for pid in last_ids:
                     add_edge(pid, nid)
+
                 body_end_ids = handle_statements(stmt.body, [nid])
-                for end_id in body_end_ids:
-                    add_edge(end_id, nid, label="Repeat", animated=True)
+                for bid in body_end_ids:
+                    add_edge(nid, bid, label="Yes")
+                    add_edge(bid, nid, label="Repeat", animated=True)
+
                 last_ids = [nid]
 
         return last_ids
+
 
     tree = ast.parse(code)
     start_id = new_node("assignment", "START")
