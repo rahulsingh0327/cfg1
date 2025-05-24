@@ -16,6 +16,7 @@ app.add_middleware(
 class CodeInput(BaseModel):
     code: str
 
+@app.get("/parse/")
 @app.post("/parse/")
 def parse_code(input: CodeInput):
     code = input.code
@@ -23,7 +24,7 @@ def parse_code(input: CodeInput):
     edges = []
     id_counter = 0
 
-    def new_node(node_type, label, x_offset=0):
+    def new_node(node_type, label):
         nonlocal id_counter
         node_id = str(id_counter)
         id_counter += 1
@@ -31,7 +32,7 @@ def parse_code(input: CodeInput):
             "id": node_id,
             "type": node_type,
             "data": {"label": label},
-            "position": {"x": x_offset, "y": 150 * id_counter}
+            "position": {"x": 0, "y": 150 * id_counter}
         })
         return node_id
 
@@ -73,20 +74,20 @@ def parse_code(input: CodeInput):
                 for pid in last_ids:
                     add_edge(pid, nid)
 
-                # YES branch (default vertical)
                 then_end_ids = handle_statements(stmt.body, [nid])
                 for tid in then_end_ids:
-                    add_edge(nid, tid, label="Yes", source_handle="yes")
+                    add_edge(nid, tid, label="Yes")
 
-                # NO branch (shifted right)
                 if stmt.orelse:
-                    original_new_node = new_node
-                    def shifted_node(type, label): return original_new_node(type, label, x_offset=250)
-                    globals()['new_node'] = shifted_node
                     else_end_ids = handle_statements(stmt.orelse, [nid])
-                    globals()['new_node'] = original_new_node
                     for eid in else_end_ids:
-                        add_edge(nid, eid, label="No", source_handle="no")
+                        # Find the index of the node in the nodes list
+                        node_index = next((index for index, node in enumerate(nodes) if node['id'] == eid), None)
+                        if node_index is not None:
+                            # Change the position of the "No" branch node
+                            new_position = {"x": 400, "y": 200 * (len(nodes) + 1)}  # Adjust x for right positioning
+                            nodes[node_index]["position"] = new_position  # Update the position of the else node
+                        add_edge(nid, eid, label="No")
                     last_ids = then_end_ids + else_end_ids
                 else:
                     last_ids = then_end_ids + [nid]
@@ -99,8 +100,9 @@ def parse_code(input: CodeInput):
 
                 body_end_ids = handle_statements(stmt.body, [nid])
                 for bid in body_end_ids:
-                    add_edge(nid, bid, label="Yes", source_handle="yes")
+                    add_edge(nid, bid, label="Yes")
                     add_edge(bid, nid, label="Repeat", animated=True)
+
                 last_ids = [nid]
 
             elif isinstance(stmt, ast.While):
@@ -111,11 +113,13 @@ def parse_code(input: CodeInput):
 
                 body_end_ids = handle_statements(stmt.body, [nid])
                 for bid in body_end_ids:
-                    add_edge(nid, bid, label="Yes", source_handle="yes")
+                    add_edge(nid, bid, label="Yes")
                     add_edge(bid, nid, label="Repeat", animated=True)
+
                 last_ids = [nid]
 
         return last_ids
+
 
     tree = ast.parse(code)
     start_id = new_node("assignment", "START")
