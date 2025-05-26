@@ -19,13 +19,14 @@ export default function getLayoutedElements(nodes, edges, direction = 'TB') {
   });
 
   dagre.layout(dagreGraph);
-
+  
   return {
+    
     nodes: nodes.map(node => {
       const pos = dagreGraph.node(node.id);
       node.position = {
-        x: pos.x - nodeWidth / 2,
-        y: pos.y - nodeHeight / 2,
+        x: node.x,
+        y: node.y,
       };
       return node;
     }),
